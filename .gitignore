@@ -1,0 +1,4 @@
+credentials.py
+*.pyc
+*.jpg
+.DS_Store
