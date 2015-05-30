@@ -88,7 +88,10 @@ def process_tweet(tweet):
 	response = requests.get(image_url, stream=True)
 	tweet_image = Image.open(StringIO(response.content))
 	faces_added = add_faces(tweet_image, output_path='output-{}.jpg'.format(tweet_id))
-	text = '{} See: {}'.format(tweet_author, ', '.join(faces_added[1]))
+	if faces_added[1]:
+		text = '{} See: {}'.format(tweet_author, ', '.join(faces_added[1]))
+	else:
+		text = '{} Sorry, we were unable to fit your face. Please try an alternative photograph.'.format(tweet_author)
 	status = api.update_with_media(filename=faces_added[0], status=text, in_reply_to_status_id=tweet_id)
 	#status = text
 	os.remove('output-{}.jpg'.format(tweet_id))
