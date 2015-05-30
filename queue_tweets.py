@@ -19,16 +19,16 @@ if since_id:
 else:
 	mentions = api.mentions_timeline(include_rts=False)
 for t_index, tweet in enumerate(mentions[::-1]):
+	tweet_id = tweet.id
 	if tweet.text[:10] == '@facedepot':
 		try:
 			image_url = tweet.entities['media'][0]['media_url']
 		except (KeyError, IndexError):
 			print 'No image'
 		else:
-			tweet_id = tweet.id
 			tweet_author = '@' + tweet.author.screen_name
-		tweet_details = '{} | {} | {}'.format(tweet_id, tweet_author, image_url)
-		print tweet_details
-		result = tweet_queue.enqueue(process_tweet, tweet_details)
+			tweet_details = '{} | {} | {}'.format(tweet_id, tweet_author, image_url)
+			print tweet_details
+			result = tweet_queue.enqueue(process_tweet, tweet_details)
 	redis_client.set('fd_last_tweet_id', tweet_id)
 
