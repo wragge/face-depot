@@ -8,11 +8,30 @@ import requests
 import redis
 from StringIO import StringIO
 import random
+import time
 from pymongo import MongoClient, GEO2D
+try:
+    import urllib3.contrib.pyopenssl
+    urllib3.contrib.pyopenssl.inject_into_urllib3()
+except ImportError:
+    pass
 
 from credentials import MONGOLAB_URL
 
+
+
+FACE_CLASSIFIER = '/usr/local/Cellar/opencv/2.4.11_1/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml'
+
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+
+auth = tweepy.OAuthHandler(credentials.CONSUMER_KEY, credentials.CONSUMER_SECRET)
+auth.set_access_token(credentials.ACCESS_TOKEN, credentials.ACCESS_TOKEN_SECRET)
+
+api = tweepy.API(auth)
+
 def mask(im):
+	'''Add a nice elliptical mask to images.'''
+	#You get a nicer result if you start big and then resize.
 	old_width = im.size[0] * 3
 	old_height = im.size[1] * 3
 	new_width = int(old_width * .7)
@@ -25,6 +44,7 @@ def mask(im):
 	draw = ImageDraw.Draw(mask) 
 	draw.ellipse(ellipse_size, fill=160)
 	mask = mask.resize(im.size, Image.ANTIALIAS)
+	#Blur radius is small so apply multiple times for extra fuzziness.
 	n = 0
   	while n < 3:
 		mask = mask.filter(ImageFilter.BLUR)
@@ -34,42 +54,45 @@ def mask(im):
 	output.putalpha(mask)
 	return output
 
-FACE_CLASSIFIER = '/usr/local/Cellar/opencv/2.4.11_1/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml'
 
-redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+def add_faces(tweet_image, output_path='output.jpg', max_faces=4):
+	'''Replace faces in photos with faces from the Face Depot.'''
+	dbclient = MongoClient(MONGOLAB_URL)
+	db = dbclient.get_default_database()
+	fd_faces = db.fd_faces
+	tweet_image.save('temp.jpg')
+	cv_image = cv2.imread('temp.jpg', 0)
+	os.remove('temp.jpg')
+	face_cl = cv2.CascadeClassifier(FACE_CLASSIFIER)
+	faces = face_cl.detectMultiScale(cv_image, scaleFactor=1.2, minNeighbors=3, minSize=(100, 100), flags=cv.CV_HAAR_SCALE_IMAGE)
+	articles = []
+	for f_index, (x,y,w,h) in enumerate(faces[:max_faces]):
+		new_faces = list(fd_faces.find({'random_id': {'$near': [random.random(), 0]}}).limit(1))
+		new_face_url = 'http://facedepot.s3.amazonaws.com/{}.jpg'.format(new_faces[0]['image'])
+		article_id = new_faces[0]['article_id']
+		article_url = 'http://nla.gov.au/nla.news-article{}'.format(article_id)
+		articles.append(article_url)
+		response = requests.get(new_face_url, stream=True)
+		new_face = Image.open(StringIO(response.content)).convert('RGBA')
+		#new_face = Image.open('../images/faces/{}.jpg'.format(new_faces[0]['image'])).convert('RGBA')
+		new_face = new_face.resize((w,h), Image.ANTIALIAS)
+		new_face = mask(new_face)
+		tweet_image.paste(new_face, (x, y), new_face)
+	tweet_image.save(output_path)
+	return [output_path, articles]
 
-auth = tweepy.OAuthHandler(credentials.CONSUMER_KEY, credentials.CONSUMER_SECRET)
-auth.set_access_token(credentials.ACCESS_TOKEN, credentials.ACCESS_TOKEN_SECRET)
 
-api = tweepy.API(auth)
-
-dbclient = MongoClient(MONGOLAB_URL)
-db = dbclient.get_default_database()
-fd_faces = db.fd_faces
-
-mentions = api.mentions_timeline()
-for t_index, tweet in enumerate(mentions):
-	try:
-		image_url = tweet.entities['media'][0]['media_url']
-	except (KeyError, IndexError):
-		print 'No image'
-	else:
-		response = requests.get(image_url, stream=True)
-		image = Image.open(StringIO(response.content))
-		image.save('temp.jpg')
-		img = cv2.imread('temp.jpg', 0)
-		face_cl = cv2.CascadeClassifier(FACE_CLASSIFIER)
-		faces = face_cl.detectMultiScale(img, scaleFactor=1.1, minNeighbors=2, minSize=(100, 100), flags=cv.CV_HAAR_SCALE_IMAGE)
-		for f_index, (x,y,w,h) in enumerate(faces):
-			new_faces = list(fd_faces.find({'random_id': {'$near': [random.random(), 0]}}).limit(1))
-			face =Image.open('{}/{}.jpg'.format('/Users/tim/mycode/facedepot/images/faces', new_faces[0]['image'])).convert('RGBA')
-			#face.show()
-			#face = ImageOps.autocontrast(face, 5).convert('RGBA')
-			new_mask = mask(face)
-			new_mask.show()
-			new_face = new_mask.resize((w,h), Image.ANTIALIAS)
-			image.paste(new_face, (x, y), new_face)
-		image.save('output-{}.jpg'.format(t_index))
+def process_tweet(tweet):
+	tweet_id, tweet_author, image_url = tweet.split(' | ')
+	response = requests.get(image_url, stream=True)
+	tweet_image = Image.open(StringIO(response.content))
+	faces_added = add_faces(tweet_image, output_path='output-{}.jpg'.format(tweet_id))
+	text = '{} See: {}'.format(tweet_author, ', '.join(faces_added[1]))
+	status = api.update_with_media(filename=faces_added[0], status=text, in_reply_to_status_id=tweet_id)
+	#status = text
+	#os.remove('output-{}.jpg'.format(tweet_id))
+	time.sleep(20)
+	return status
 		
 
 	
