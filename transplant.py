@@ -90,9 +90,9 @@ def process_tweet(tweet):
 	text = '{} See: {}'.format(tweet_author, ', '.join(faces_added[1]))
 	status = api.update_with_media(filename=faces_added[0], status=text, in_reply_to_status_id=tweet_id)
 	#status = text
-	#os.remove('output-{}.jpg'.format(tweet_id))
+	os.remove('output-{}.jpg'.format(tweet_id))
 	time.sleep(20)
-	return status
+	return status.text
 		
 
 	

@@ -13,7 +13,7 @@ redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 tweet_queue = Queue(connection=redis.Redis())
 
 since_id = redis_client.get('fd_last_tweet_id')
-since_id = None
+#since_id = None
 if since_id:
 	mentions = api.mentions_timeline(since_id=since_id, include_rts=False)
 else:
