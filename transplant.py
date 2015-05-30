@@ -21,6 +21,7 @@ from credentials import MONGOLAB_URL
 
 
 FACE_CLASSIFIER = '/usr/local/Cellar/opencv/2.4.11_1/share/OpenCV/haarcascades/haarcascade_frontalface_default.xml'
+FACE_CLASSIFIER = '/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml'
 
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
 
