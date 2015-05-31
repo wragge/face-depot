@@ -65,7 +65,7 @@ def add_faces(tweet_image, output_path='output.jpg', max_faces=4):
 	cv_image = cv2.imread('temp.jpg', 0)
 	os.remove('temp.jpg')
 	face_cl = cv2.CascadeClassifier(FACE_CLASSIFIER)
-	faces = face_cl.detectMultiScale(cv_image, scaleFactor=1.2, minNeighbors=2, minSize=(50, 50), flags=cv.CV_HAAR_SCALE_IMAGE)
+	faces = face_cl.detectMultiScale(cv_image, scaleFactor=1.2, minNeighbors=3, minSize=(50, 50), flags=cv.CV_HAAR_SCALE_IMAGE)
 	articles = []
 	for f_index, (x,y,w,h) in enumerate(faces[:max_faces]):
 		new_faces = list(fd_faces.find({'random_id': {'$near': [random.random(), 0]}}).limit(1))
